@@ -1,7 +1,5 @@
 /.mypy_cache
-/hello.png
-/hellon.png
-/images
-/test.png
-/val2017
+*.txt
+*.png
+/base_images
 /__pycache__
