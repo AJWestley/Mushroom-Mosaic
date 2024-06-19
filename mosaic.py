@@ -1,5 +1,7 @@
-from numpy.random import choice
+from multiprocessing import Pool
+from functools import partial
 import glob
+from numpy.random import choice
 from sklearn.cluster import MiniBatchKMeans
 from tkinter import filedialog
 from PIL import Image
@@ -48,29 +50,35 @@ def construct_image(source_image: np.ndarray, image_map: dict, disable_logs: boo
     '''Creates a mosaic of a given image from a set of given image pieces'''
     
     # Build image rows
-    rows = []
     x, y, _ = source_image.shape
-    for r in loading_bar(range(x), 'Generating Mosaic Pieces...', disable_logs):
-        pixel = tuple(source_image[r, 0])
+    
+    # Create partial function to generate each row for application in pool.map
+    gen_row = partial(create_row, source_image=source_image, y=y, image_map=image_map)
+    
+    # Multithread the image generation
+    with Pool() as pool:
+        rows = pool.map(gen_row, loading_bar(range(x), 'Building Image...', disable_logs))
+        
+        println('Finishing Up...')
+        final_image = np.vstack(rows)
+    
+    return final_image
+
+def create_row(r: int, source_image: np.ndarray, y: int, image_map: dict) -> np.ndarray:
+    ''' Generates a single row of the image '''
+    pixel = tuple(source_image[r, 0])
+    if (pixel not in image_map):
+        pixel = find_nearest(pixel, image_map)
+    selected_path = choice(image_map[pixel])
+    row = iio.imread(selected_path)
+    for c in range(1, y):
+        pixel = tuple(source_image[r, c])
         if (pixel not in image_map):
             pixel = find_nearest(pixel, image_map)
         selected_path = choice(image_map[pixel])
-        row = iio.imread(selected_path)
-        for c in range(1, y):
-            pixel = tuple(source_image[r, c])
-            if (pixel not in image_map):
-                pixel = find_nearest(pixel, image_map)
-            selected_path = choice(image_map[pixel])
-            selected_image = iio.imread(selected_path)
-            row = np.hstack((row, selected_image))
-        rows.append(row)
-    
-    # Stack rows into full image
-    final_image = rows[0]
-    for i in loading_bar(range(1, len(rows)), 'Building Mosaic...', disable_logs):
-        final_image = np.vstack((final_image, rows[i]))
-    
-    return final_image
+        selected_image = iio.imread(selected_path)
+        row = np.hstack((row, selected_image))
+    return row
 
 def load_image() -> tuple:
     '''Loads an image from a file dialog and returns a flattened (n x 3) numpy array'''
@@ -89,7 +97,9 @@ def save_image(image: np.ndarray, disable_logs: bool = True) -> None:
     path = filedialog.asksaveasfilename(filetypes=[('Image files', '.png .PNG')], defaultextension='.png')
     output_image = Image.fromarray(image)
     output_image.save(path)
-    println('Done', disable_logs)
+    
+    if not disable_logs:
+        print('Done')
 
 def run_pixel_clustering(image: np.ndarray, width: int, height: int, disable_logs: bool = True) -> tuple:
     '''Runs k-means clustering on a flattened (n x 3) image array, then returns the resulting image and trained model'''

@@ -3,6 +3,8 @@ import numpy as np
 import imageio.v3 as iio
 import os
 
+THUMBNAIL_SIZE = 128
+
 def read_image_flat(filepath: str) -> tuple:
     '''Reads an image to a flattened (n x 3) numpy array'''
     
@@ -10,7 +12,7 @@ def read_image_flat(filepath: str) -> tuple:
     x, y, _ = im.shape
     return im.reshape((x * y, -1)), x, y
 
-def create_thumbnails(filepaths: list[str], size = (128, 128)) -> None:
+def create_thumbnails(filepaths: list[str], size = (THUMBNAIL_SIZE, THUMBNAIL_SIZE)) -> None:
     '''Creates a set of image thumbnails'''
     
     for infile in filepaths:
