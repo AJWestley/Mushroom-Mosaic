@@ -1,3 +1,4 @@
+import json
 from multiprocessing import Pool
 from functools import partial
 import glob
@@ -8,7 +9,7 @@ from PIL import Image
 from utilities import *
 from image_utils import *
 
-NUM_CLUSTERS = 100
+NUM_CLUSTERS = 50
 TEMP_FILE = 'temp.png'
 
 def create_mosaic(disable_logs = True) -> None:
@@ -37,13 +38,15 @@ def find_nearest(pixel: tuple, img_map: dict) -> tuple:
 def create_image_map(folder: str, kmeans: MiniBatchKMeans, disable_logs: bool = True) -> dict:
     '''Uses a trained k-means model to cluster the average colour of a set of images, then puts them in a dictionary'''
     
-    img_map: dict = {}
-    for infile in loading_bar(glob.glob(f"{folder}/*.thumbnail"), 'Finding Suitable Images...', disable_logs):
-        avg_colour = average_colour(infile)
-        predicted = kmeans.cluster_centers_[kmeans.predict(avg_colour.reshape((1, len(avg_colour))))].astype('uint8')
-        predicted = tuple(map(tuple, predicted))[0]
-        img_map.setdefault(predicted, [])
-        img_map[predicted].append(infile)
+    with open('image_mappings.json', 'r') as json_file:
+        json_data = json.load(json_file)
+        img_map: dict = {}
+        for avg_colour in loading_bar(json_data, 'Finding Suitable Images...', disable_logs):
+            colour = np.array(tuple(map(int, avg_colour.split('|'))))
+            predicted = kmeans.cluster_centers_[kmeans.predict(colour.reshape((1, len(colour))))].astype('uint8')
+            predicted = tuple(map(tuple, predicted))[0]
+            img_map.setdefault(predicted, [])
+            img_map[predicted].extend(json_data[avg_colour])
     return img_map
 
 def construct_image(source_image: np.ndarray, image_map: dict, disable_logs: bool = True):
@@ -99,7 +102,7 @@ def save_image(image: np.ndarray, disable_logs: bool = True) -> None:
     output_image.save(path)
     
     if not disable_logs:
-        print('Done')
+        print(f'{'Done':<100}')
 
 def run_pixel_clustering(image: np.ndarray, width: int, height: int, disable_logs: bool = True) -> tuple:
     '''Runs k-means clustering on a flattened (n x 3) image array, then returns the resulting image and trained model'''
