@@ -1,7 +1,6 @@
 import json
 from multiprocessing import Pool
 from functools import partial
-import glob
 from numpy.random import choice
 from sklearn.cluster import MiniBatchKMeans
 from tkinter import filedialog
